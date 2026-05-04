@@ -5,33 +5,41 @@ metadata:
 spec:
   template:
     spec:
-      containers:
-        - name: init-db
-          image: mariadb:10.6
-          command:
-            - sh
-            - -c
-            - |
-              echo "Waiting for MariaDB..."
-              until mysql -h mariadb -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1"; do
-                sleep 2
-              done
+      restartPolicy: Never
 
-              echo "Running init script..."
-              mysql -h mariadb -u root -p"$MYSQL_ROOT_PASSWORD" < /init/init.sql
+      containers:
+        - name: mariadb-init
+          image: mariadb:10.6
 
           env:
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-secret
+                  key: MYSQL_PASSWORD
+
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: mariadb-secret
                   key: MYSQL_ROOT_PASSWORD
 
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for MariaDB..."
+              sleep 10
+
+              echo "Installing envsubst..."
+              apt-get update && apt-get install -y gettext-base
+
+              echo "Running init script..."
+              envsubst < /scripts/init.sql | mysql -h mariadb -u root -p$MYSQL_ROOT_PASSWORD
+
           volumeMounts:
             - name: init-script
-              mountPath: /init
-
-      restartPolicy: OnFailure
+              mountPath: /scripts
 
       volumes:
         - name: init-script

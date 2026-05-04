@@ -4,30 +4,34 @@ metadata:
   name: mariadb-init
 data:
   init.sql: |
-    -- Check if the database exists
-    SET @db_exists := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'ecomdb');
+    -- Use the database
+    USE ecomdb;
 
-    -- Only create and initialize if it doesn't exist
-    SET @sql := IF(@db_exists = 0,
-      'CREATE DATABASE ecomdb; USE ecomdb; CREATE TABLE products (
-          id mediumint(8) unsigned NOT NULL auto_increment,
-          Name varchar(255) default NULL,
-          Price varchar(255) default NULL,
-          ImageUrl varchar(255) default NULL,
-          PRIMARY KEY (id)
-      ) AUTO_INCREMENT=1; INSERT INTO products (Name,Price,ImageUrl) VALUES
-          (''Laptop'',''100'',''c-1.png''),
-          (''Drone'',''200'',''c-2.png''),
-          (''VR'',''300'',''c-3.png''),
-          (''Tablet'',''50'',''c-5.png''),
-          (''Watch'',''90'',''c-6.png''),
-          (''Phone Covers'',''20'',''c-7.png''),
-          (''Phone'',''80'',''c-8.png''),
-          (''Laptop'',''150'',''c-4.png'');',
-      'SELECT 1;' -- do nothing if db exists
+    -- Ensure the app user exists
+    CREATE USER IF NOT EXISTS 'appuser'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
+    ALTER USER 'appuser'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
+    GRANT ALL PRIVILEGES ON ecomdb.* TO 'appuser'@'%';
+    FLUSH PRIVILEGES;
+
+    -- Create products table if missing
+    CREATE TABLE IF NOT EXISTS products (
+        id MEDIUMINT(8) UNSIGNED NOT NULL AUTO_INCREMENT,
+        Name VARCHAR(255) DEFAULT NULL,
+        Price VARCHAR(255) DEFAULT NULL,
+        ImageUrl VARCHAR(255) DEFAULT NULL,
+        PRIMARY KEY (id)
     );
 
-    -- Execute the conditional SQL
-    PREPARE stmt FROM @sql;
-    EXECUTE stmt;
-    DEALLOCATE PREPARE stmt;
+    -- Seed data only if table is empty
+    INSERT INTO products (Name, Price, ImageUrl)
+    SELECT * FROM (
+        SELECT 'Laptop', '100', 'c-1.png' UNION ALL
+        SELECT 'Drone', '200', 'c-2.png' UNION ALL
+        SELECT 'VR', '300', 'c-3.png' UNION ALL
+        SELECT 'Tablet', '50', 'c-5.png' UNION ALL
+        SELECT 'Watch', '90', 'c-6.png' UNION ALL
+        SELECT 'Phone Covers', '20', 'c-7.png' UNION ALL
+        SELECT 'Phone', '80', 'c-8.png' UNION ALL
+        SELECT 'Laptop', '150', 'c-4.png'
+    ) AS tmp
+    WHERE NOT EXISTS (SELECT 1 FROM products LIMIT 1);
