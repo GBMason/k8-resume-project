@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mariadb-init-job
+spec:
+  template:
+    spec:
+      containers:
+        - name: init-db
+          image: mariadb:10.6
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MariaDB..."
+              until mysql -h mariadb -u root -p"$MYSQL_ROOT_PASSWORD" -e "SELECT 1"; do
+                sleep 2
+              done
+
+              echo "Running init script..."
+              mysql -h mariadb -u root -p"$MYSQL_ROOT_PASSWORD" < /init/init.sql
+
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mariadb-secret
+                  key: MYSQL_ROOT_PASSWORD
+
+          volumeMounts:
+            - name: init-script
+              mountPath: /init
+
+      restartPolicy: OnFailure
+
+      volumes:
+        - name: init-script
+          configMap:
+            name: mariadb-init
